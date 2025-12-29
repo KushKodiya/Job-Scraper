@@ -1,0 +1,7 @@
+playwright
+beautifulsoup4
+apscheduler
+slack_sdk
+sqlalchemy
+pydantic
+python-dotenv
