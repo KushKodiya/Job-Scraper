@@ -1,7 +1,9 @@
 playwright
-beautifulsoup4
+sqlalchemy
 apscheduler
 slack_sdk
-sqlalchemy
-pydantic
+beautifulsoup4
+fake-useragent
+aiohttp
+slack_bolt
 python-dotenv

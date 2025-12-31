@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
 import hashlib
+from .browser_manager import BrowserManager
 
 @dataclass
 class JobData:
@@ -18,12 +19,13 @@ class JobData:
         return hashlib.md5(unique_str.encode()).hexdigest()
 
 class BaseScraper(ABC):
-    def __init__(self, company_name: str):
+    def __init__(self, company_name: str, browser_manager: BrowserManager):
         self.company_name = company_name
+        self.browser_manager = browser_manager
 
     @abstractmethod
-    def scrape(self) -> List[JobData]:
-        """Scrape the carrier page and return a list of JobData objects."""
+    async def scrape(self) -> List[JobData]:
+        """Scrape the carrier page/job board and return a list of JobData objects."""
         pass
         
     def filter_interests(self, job: JobData) -> List[str]:
@@ -44,9 +46,6 @@ class BaseScraper(ABC):
             if any(term in title_lower for term in terms):
                 tags.append(category)
                 
-        # Heuristic: if company is Boeing, always add aerospace if not present? 
-        # For now let's stick to keyword matching.
-        
         return tags
 
     def is_relevant_role(self, title: str) -> bool:
@@ -65,3 +64,12 @@ class BaseScraper(ABC):
             return False
             
         return any(term in title_lower for term in target_keywords)
+
+class JobBoardScraper(BaseScraper):
+    def __init__(self, company_name: str, browser_manager: BrowserManager, search_terms: List[str]):
+        super().__init__(company_name, browser_manager)
+        self.search_terms = search_terms
+
+    @abstractmethod
+    async def scrape(self) -> List[JobData]:
+        pass

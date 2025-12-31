@@ -1,42 +1,41 @@
 from typing import List
-from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
-import time
+import asyncio
 from ..scraper_engine import BaseScraper, JobData
 
 class BoeingScraper(BaseScraper):
-    def __init__(self):
-        super().__init__("Boeing")
+    def __init__(self, browser_manager):
+        super().__init__("Boeing", browser_manager)
         self.start_urls = [
             "https://jobs.boeing.com/search-jobs",
             "https://jobs.boeing.com/search-jobs/intern/185/1"
         ]
 
-    def scrape(self) -> List[JobData]:
+    async def scrape(self) -> List[JobData]:
         print(f"[{self.company_name}] Starting scrape...")
         jobs = []
         
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+        context = await self.browser_manager.get_new_context()
+        page = await context.new_page()
+        
+        try:
+            for url in self.start_urls:
+                print(f"[{self.company_name}] Scraping URL: {url}")
+                try:
+                    await page.goto(url, timeout=60000)
+                    # Wait for the list to load
+                    await page.wait_for_selector('#search-results-list', timeout=30000)
+                    
+                    # Scrape the jobs from the current page
+                    content = await page.content()
+                    self._extract_jobs_from_page(content, jobs)
+                except Exception as e:
+                        print(f"[{self.company_name}] Error scraping URL {url}: {e}")
             
-            try:
-                for url in self.start_urls:
-                    print(f"[{self.company_name}] Scraping URL: {url}")
-                    try:
-                        page.goto(url, timeout=60000)
-                        # Wait for the list to load
-                        page.wait_for_selector('#search-results-list', timeout=30000)
-                        
-                        # Scrape the jobs from the current page
-                        self._extract_jobs_from_page(page.content(), jobs)
-                    except Exception as e:
-                         print(f"[{self.company_name}] Error scraping URL {url}: {e}")
-                
-            except Exception as e:
-                print(f"[{self.company_name}] Error during scraping: {e}")
-            finally:
-                browser.close()
+        except Exception as e:
+            print(f"[{self.company_name}] Error during scraping: {e}")
+        finally:
+            await context.close()
                 
         print(f"[{self.company_name}] Found {len(jobs)} jobs.")
         return jobs
@@ -54,10 +53,8 @@ class BoeingScraper(BaseScraper):
                 title_elem = link_elem.select_one('.search-results__job-title')
                 title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
                 
-                url = "https://jobs.boeing.com" + link_elem.get('href') if link_elem.get('href').startswith('/') else link_elem.get('href')
-                
-                # Location and Date are often in spans with specific classes
-                # Inspection said: .search-results__job-info.location / .date
+                href = link_elem.get('href')
+                url = "https://jobs.boeing.com" + href if href.startswith('/') else href
                 
                 loc_elem = li.select_one('.search-results__job-info.location')
                 location = loc_elem.get_text(strip=True) if loc_elem else "Unknown Location"
