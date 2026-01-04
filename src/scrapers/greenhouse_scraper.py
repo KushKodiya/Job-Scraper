@@ -76,12 +76,32 @@ class GreenhouseScraper(GenericJobBoardScraper):
                 if not self.is_relevant_role(title):
                     continue
 
+                # Extract ID from URL
+                # Formats: /company/jobs/12345 or ?gh_jid=12345
+                job_id = None
+                if url:
+                    if "gh_jid=" in url:
+                        import urllib.parse
+                        parsed = urllib.parse.urlparse(url)
+                        qs = urllib.parse.parse_qs(parsed.query)
+                        if 'gh_jid' in qs:
+                            job_id = qs['gh_jid'][0]
+                    else:
+                        clean_url = url.split('?')[0]
+                        parts = clean_url.rstrip('/').split('/')
+                        # Only if last part resembles an ID (digits) since GH usually uses numeric IDs except for token
+                        if parts:
+                             # Check if it looks like an ID? Or just use last part.
+                             # GH IDs are usually numeric but can be strings.
+                             job_id = parts[-1]
+
                 job = JobData(
                     title=title,
                     company="Greenhouse Job", # Placeholder, ideally passed in
                     url=url,
                     location=location,
-                    date_posted=None
+                    date_posted=None,
+                    job_id=job_id
                 )
                 jobs_list.append(job)
                 

@@ -58,12 +58,37 @@ class DribbbleScraper(GenericJobBoardScraper):
                 if not self.is_relevant_role(title):
                     continue
 
+                # Extract ID from URL
+                # Formats: /jobs/123456-Title
+                job_id = None
+                if url:
+                    clean_url = url.split('?')[0]
+                    parts = clean_url.rstrip('/').split('/')
+                    for part in reversed(parts):
+                        if part.replace('-','').isdigit(): # Check if it's the ID
+                            job_id = part
+                            break
+                        # Heuristic: Dribbble IDs are usually the second to last or last part
+                        # e.g. /jobs/181818-Title -> 181818 is usually mixed with title or separate
+                        # Actually dribbble is usually /jobs/12345-title.
+                        # Let's simple use the segment with digits that comes after 'jobs'
+                    
+                    # Simpler approach for Dribbble:
+                    # /jobs/123-title -> split by - take first
+                    if "/jobs/" in url:
+                        try:
+                            slug = url.split("/jobs/")[1]
+                            job_id = slug.split("-")[0]
+                        except:
+                            pass
+
                 job = JobData(
                     title=title,
                     company=company,
                     url=url,
                     location=location,
-                    date_posted=None
+                    date_posted=None,
+                    job_id=job_id
                 )
                 jobs_list.append(job)
                 

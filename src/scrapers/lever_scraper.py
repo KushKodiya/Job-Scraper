@@ -68,12 +68,22 @@ class LeverScraper(GenericJobBoardScraper):
                 if not self.is_relevant_role(title):
                     continue
 
+                # Extract ID from URL (usually the last segment)
+                job_id = None
+                if url:
+                    # Remove query params
+                    clean_url = url.split('?')[0]
+                    parts = clean_url.rstrip('/').split('/')
+                    if parts:
+                        job_id = parts[-1]
+
                 job = JobData(
                     title=title,
                     company="Lever Job", 
                     url=url,
                     location=location,
-                    date_posted=None
+                    date_posted=None,
+                    job_id=job_id
                 )
                 jobs_list.append(job)
                 

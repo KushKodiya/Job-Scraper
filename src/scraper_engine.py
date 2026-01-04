@@ -11,11 +11,19 @@ class JobData:
     url: str
     location: Optional[str] = None
     date_posted: Optional[str] = None
+    job_id: Optional[str] = None # Unique ID from the source (e.g. Indeed JK or Greenhouse ID)
 
     @property
     def id(self) -> str:
-        """Generate a unique ID for the job based on company and URL."""
-        unique_str = f"{self.company}:{self.url}"
+        """Generate a unique ID for the job based on company and ID/URL."""
+        if self.job_id:
+            # Use the explicit ID if provided (more stable)
+            unique_str = f"{self.company}:{self.job_id}"
+        else:
+            # Fallback to URL (strip common tracking params if possible or use raw)
+            # Simple strip of query params might be too aggressive if ID is in query
+            unique_str = f"{self.company}:{self.url}"
+            
         return hashlib.md5(unique_str.encode()).hexdigest()
 
 class BaseScraper(ABC):

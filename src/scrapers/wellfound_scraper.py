@@ -81,12 +81,23 @@ class WellfoundScraper(GenericJobBoardScraper):
                 if not self.is_relevant_role(title):
                     continue
 
+                # Extract ID
+                job_id = None
+                if "/jobs/" in url:
+                    try:
+                        # /jobs/12345-title
+                        slug = url.split("/jobs/")[1]
+                        job_id = slug.split("-")[0]
+                    except:
+                        pass
+
                 job = JobData(
                     title=title,
                     company=company,
                     url=url,
                     location=location,
-                    date_posted=None
+                    date_posted=None,
+                    job_id=job_id
                 )
                 jobs_list.append(job)
                 

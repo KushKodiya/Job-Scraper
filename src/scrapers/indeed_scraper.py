@@ -77,6 +77,9 @@ class IndeedScraper(GenericJobBoardScraper):
                     # Backup: sometimes the whole card is clickable or ID is elsewhere
                     url = "https://www.indeed.com/viewjob?jk=" + card.parent.get('data-jk', '')
 
+                # ID
+                job_id = card.parent.get('data-jk')
+                
                 # Filter relevance
                 if not self.is_relevant_role(title):
                     continue
@@ -86,7 +89,8 @@ class IndeedScraper(GenericJobBoardScraper):
                     company=company, # Source company (e.g. "Boeing")
                     url=url,
                     location=location,
-                    date_posted=None 
+                    date_posted=None,
+                    job_id=job_id
                 )
                 jobs_list.append(job)
                 
