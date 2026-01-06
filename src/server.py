@@ -24,6 +24,18 @@ app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 Session = init_db()
 sub_manager = SubscriptionManager(Session)
 
+CATEGORIES = {
+    'aerospace': 'Rockets, avionics, propulsion, and defense.',
+    'software': 'Development, data science, AI, and engineering.',
+    'automotive': 'Autonomous vehicles, ADAS, and EVs.',
+    'finance': 'Banking, trading, audit, and analysis.',
+    'manufacturing': 'Production, supply chain, and operations.',
+    'ece hardware': 'Circuits, FPGA, embedded systems, and electronics.',
+    'semiconductors': 'Chip design, lithography, FAB, and VLSI.',
+    'general': 'Business, marketing, HR, and sales.',
+    'other': 'Miscellaneous roles.'
+}
+
 @app.command("/subscribe")
 def handle_subscribe(ack, respond, command):
     ack()
@@ -31,7 +43,13 @@ def handle_subscribe(ack, respond, command):
     text = command['text'].strip().lower()
     
     if not text:
-        respond("Please specify an interest to subscribe to. Usage: `/subscribe <interest>`")
+        # Show help with categories
+        msg = "*Available Job Categories:*\n"
+        for cat, desc in CATEGORIES.items():
+            msg += f"• *{cat}*: {desc}\n"
+        
+        msg += "\nUsage: `/subscribe <category>`"
+        respond(msg)
         return
         
     sub_manager.add_subscription(user_id, text)

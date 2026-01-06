@@ -66,9 +66,7 @@ class BaseScraper(ABC):
         """Check if the job title matches Internship or New Grad keywords."""
         title_lower = title.lower()
         target_keywords = [
-            'intern', 'internship', 'co-op', 
-            'grad', 'graduate', 'entry level', 'entry-level', 
-            'early career', 'junior', 'associate' 
+            'intern', 'internship', 'co-op'
         ]
         
         # Exclude senior roles explicitly to be safe

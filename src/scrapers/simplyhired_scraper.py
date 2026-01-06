@@ -78,8 +78,6 @@ class SimplyHiredScraper(GenericJobBoardScraper):
                     company=company,
                     url=url,
                     location=location,
-                    url=url,
-                    location=location,
                     date_posted=None
                 )
                 

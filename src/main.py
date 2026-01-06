@@ -137,21 +137,30 @@ async def run_scraper_cycle():
         session.close()
         await browser_manager.close()
 
+async def run_scheduler():
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_scraper_cycle, 'interval', hours=24)
+    logger.info("Scheduler started. Running every 24 hours.")
+    scheduler.start()
+    
+    # Log next run time
+    jobs = scheduler.get_jobs()
+    if jobs:
+        next_run = jobs[0].next_run_time
+        logger.info(f"Next scraper cycle scheduled for: {next_run}")
+
+    # Keep the task alive
+    while True:
+        await asyncio.sleep(3600)
+
 def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == "--now":
             asyncio.run(run_scraper_cycle())
     else:
-        # Schedule it
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(run_scraper_cycle, 'interval', hours=4)
-        logger.info("Scheduler started. Running every 4 hours.")
         print("Press Ctrl+C to exit")
-        
         try:
-            scheduler.start()
-            # AsyncIOScheduler is non-blocking, so we need to keep the event loop running
-            asyncio.get_event_loop().run_forever()
+            asyncio.run(run_scheduler())
         except (KeyboardInterrupt, SystemExit):
             pass
 
