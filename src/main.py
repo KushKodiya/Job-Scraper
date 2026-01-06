@@ -12,11 +12,8 @@ from .scrapers.boeing_scraper import BoeingScraper
 from .scrapers.indeed_scraper import IndeedScraper
 from .scrapers.simplyhired_scraper import SimplyHiredScraper
 from .scrapers.wellfound_scraper import WellfoundScraper
-from .scrapers.foundit_scraper import FoundItScraper
-from .scrapers.dribbble_scraper import DribbbleScraper
-from .scrapers.google_search_scraper import GoogleSearchScraper
-from .scrapers.greenhouse_scraper import GreenhouseScraper
-from .scrapers.lever_scraper import LeverScraper
+
+
 from .slack_bot import SlackBot
 from .subscription_manager import SubscriptionManager
 from dotenv import load_dotenv
@@ -38,40 +35,37 @@ async def run_scraper_cycle():
     session = Session()
     
     # 2. Browser Manager
-    browser_manager = BrowserManager(headless=True)
+    # Switch to headless=False to bypass basic Cloudflare/CAPTCHA detection for debugging
+    browser_manager = BrowserManager(headless=False)
     await browser_manager.init()
     
     try:
         # 3. Initialize Scrapers & Bot
         scrapers = [
             BoeingScraper(browser_manager),
-            IndeedScraper(browser_manager, search_terms=[
-                "software engineer intern",
-                "aerospace engineering intern",
-                "finance intern"
-            ]),
+            # IndeedScraper(browser_manager, search_terms=[
+            #     "software engineer intern",
+            #     "aerospace engineering intern",
+            #     "finance intern"
+            # ]),
             SimplyHiredScraper(browser_manager, search_terms=[
                 "software engineer intern",
-                "aerospace engineering intern"
+                "aerospace engineering intern",
+                "automotive engineering intern",
+                "finance intern",
+                "manufacturing intern", 
+                "supply chain intern",
+                "hardware engineering intern",
+                "embedded systems intern",
+                "semiconductor intern", 
+                "VLSI intern"
             ]),
-            WellfoundScraper(browser_manager, search_terms=[
-                "intern" # Broader term for startups
-            ]),
-            FoundItScraper(browser_manager, search_terms=[
-                "software intern",
-                "developer intern"
-            ]),
-            DribbbleScraper(browser_manager, search_terms=[
-                "product design intern",
-                "frontend intern"
-            ]),
-            GoogleSearchScraper(browser_manager, search_queries=[
-                'site:boards.greenhouse.io "software engineer intern"',
-                'site:jobs.lever.co "software engineer intern"'
-            ])
+            # WellfoundScraper(browser_manager, search_terms=[
+            #     "intern" # Broader term for startups
+            # ]),
+
             # Note: Greenhouse/Lever scrapers would be triggered 
-            # if we had a list of board URLs to feed them. 
-            # For now, GoogleSearchScraper will find the links.
+            # if we had a list of board URLs to feed them.
         ]
         
         sub_manager = SubscriptionManager(Session)
@@ -90,6 +84,7 @@ async def run_scraper_cycle():
         
         # 5. Process Results
         new_jobs_count = 0
+        parent_thread_ts = None
         for job_data in all_found_jobs:
             # Check if exists
             existing = session.query(Job).filter_by(id=job_data.id).first()
@@ -128,10 +123,29 @@ async def run_scraper_cycle():
             new_jobs_count += 1
             
             # Post to Slack
-            await bot.post_job(job_data, tags)
+            # Create a thread for this batch if it's the first job of the batch, or reuse existing?
+            # Ideally we want ONE parent message for the whole cycle. 
+            # But the cycle logic is streaming jobs one by one.
+            # Let's start the thread BEFORE the loop if we found jobs? 
+            # Actually, we are iterating `all_found_jobs`. We can check if `new_jobs_count == 0` to start it.
+            
+            if new_jobs_count == 0 and not parent_thread_ts:
+                 # This is the first new job we are about to save. Start the thread.
+                 parent_thread_ts = await bot.post_message(f"🚀 *Scraper Cycle Started*: Finding new jobs...")
+            
+            await bot.post_job(job_data, tags, thread_ts=parent_thread_ts)
             
         session.commit()
+        session.commit()
         logger.info(f"Cycle complete. Added {new_jobs_count} new jobs.")
+        
+        if parent_thread_ts and bot.client:
+             # Update the parent message to show final count
+             await bot.client.chat_update(
+                 channel=bot.channel,
+                 ts=parent_thread_ts,
+                 text=f"✅ *Scraper Cycle Complete*: Found {new_jobs_count} new jobs today."
+             )
         
     finally:
         session.close()

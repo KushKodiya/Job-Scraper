@@ -43,7 +43,7 @@ class BaseScraper(ABC):
         
         keywords = {
             'aerospace': ['aerospace', 'propulsion', 'flight', 'avionics', 'aircraft', 'space', 'rocket', 'satellite', 'defen'], # 'defen' matches defense
-            'software': ['software', 'developer', 'engineer', 'data', 'full stack', 'backend', 'frontend', 'computer', 'machine learning', 'ai', 'cloud', 'cyber'],
+            'software': ['software', 'developer', 'full stack', 'backend', 'frontend', 'computer science', 'machine learning', 'ai', 'cloud', 'cyber', 'data science', 'data engineer', 'firmware', 'sre', 'devops'],
             'automotive': ['automotive', 'vehicle', 'autonomous', 'driver', 'adas', 'car', 'ev', 'mobility'],
             'finance': ['finance', 'accounting', 'audit', 'tax', 'analyst', 'investment', 'trading', 'risk', 'capital'],
             'manufacturing': ['manufacturing', 'production', 'industrial', 'process', 'supply chain', 'logistics', 'quality', 'operations'],

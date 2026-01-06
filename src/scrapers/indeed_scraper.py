@@ -55,30 +55,28 @@ class IndeedScraper(GenericJobBoardScraper):
         
         for card in cards:
             try:
-                title_elem = card.select_one('h2.jobTitle span')
-                if not title_elem:
-                   # Sometimes title is directly in h2 or a link
-                   title_elem = card.select_one('h2.jobTitle')
+                # Title & Link (often the same element now)
+                title_elem = card.select_one('.jcs-JobTitle')
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    href = title_elem.get('href')
+                    url = "https://www.indeed.com" + href if href.startswith('/') else href
+                else:
+                    # Fallback
+                    title_elem = card.select_one('h2.jobTitle')
+                    title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
+                    url = "https://www.indeed.com/viewjob?jk=" + card.parent.get('data-jk', '')
 
-                title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
-                
+                # Company
                 company_elem = card.select_one('[data-testid="company-name"]')
                 company = company_elem.get_text(strip=True) if company_elem else "Indeed Job"
                 
+                # Location
                 loc_elem = card.select_one('[data-testid="text-location"]')
                 location = loc_elem.get_text(strip=True) if loc_elem else "Unknown Location"
                 
-                # Get Link
-                link_elem = card.select_one('a.jcs-JobTitle')
-                if link_elem and link_elem.get('href'):
-                    href = link_elem.get('href')
-                    url = "https://www.indeed.com" + href if href.startswith('/') else href
-                else:
-                    # Backup: sometimes the whole card is clickable or ID is elsewhere
-                    url = "https://www.indeed.com/viewjob?jk=" + card.parent.get('data-jk', '')
-
                 # ID
-                job_id = card.parent.get('data-jk')
+                job_id = card.parent.get('data-jk') or card.find_parent('li').get('data-jk') if card.find_parent('li') else None
                 
                 # Filter relevance
                 if not self.is_relevant_role(title):
@@ -86,22 +84,19 @@ class IndeedScraper(GenericJobBoardScraper):
 
                 job = JobData(
                     title=title,
-                    company=company, # Source company (e.g. "Boeing")
+                    company=company,
                     url=url,
                     location=location,
                     date_posted=None,
                     job_id=job_id
                 )
                 
-                # Try to extract date
-                date_elem = card.select_one('span.date')
-                if not date_elem:
-                    date_elem = card.select_one('[data-testid="myJobsStateDate"]')
+                # Date
+                # Check multiple common selectors
+                date_elem = card.select_one('.date') or card.select_one('[data-testid="myJobsStateDate"]') or card.select_one('.myJobsState')
                 
                 if date_elem:
-                     # e.g. "Posted 30+ days ago"
-                     text = date_elem.get_text(strip=True)
-                     # Clean up "Posted" prefix if separate in text but not element
+                     text = date_elem.get_text(strip=True).replace("Posted", "").strip()
                      job.date_posted = text
 
                 jobs_list.append(job)

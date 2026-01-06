@@ -12,13 +12,37 @@ class SlackBot:
         self.token = token or os.getenv("SLACK_BOT_TOKEN")
         self.channel = channel or os.getenv("SLACK_CHANNEL")
         # If no token, we are in dry run mode
-        self.client = AsyncWebClient(token=self.token) if self.token else None
+        if self.token:
+            # Fix for SSL Cert Error on some Macs/Environments
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            self.client = AsyncWebClient(token=self.token, ssl=ssl_context)
+        else:
+            self.client = None
+            
         self.sub_manager = subscription_manager
 
-    async def post_job(self, job_data, tags: list):
+    async def post_message(self, text: str) -> str:
+        """Post a simple message and return its timestamp (ts) for threading."""
+        if self.client:
+            try:
+                response = await self.client.chat_postMessage(
+                    channel=self.channel,
+                    text=text
+                )
+                return response["ts"]
+            except SlackApiError as e:
+                print(f"Error posting parent message: {e.response['error']}")
+                return None
+        return None
+
+    async def post_job(self, job_data, tags: list, thread_ts: str = None):
         """
         Post a job to Slack.
         tags: list of strings (e.g. ['aerospace', 'finance'])
+        thread_ts: Optional timestamp of parent message to thread this reply under.
         """
         tag_str = " ".join([f"#{tag}" for tag in tags])
         
@@ -62,15 +86,21 @@ class SlackBot:
         
         if self.client:
             try:
+                # Rate limit protection: 1 msg/sec limit usually
+                import asyncio
+                await asyncio.sleep(1.2)
+                
                 await self.client.chat_postMessage(
                     channel=self.channel,
                     blocks=message_blocks,
-                    text=f"New Job: {job_data.title}" # Fallback text
+                    text=f"New Job: {job_data.title}", # Fallback text
+                    thread_ts=thread_ts # Post in thread if provided
                 )
             except SlackApiError as e:
                 print(f"Error posting to Slack: {e.response['error']}")
         else:
             print("--- [DRY RUN] SLACK POST ---")
+            print(f"Parent Thread: {thread_ts}")
             print(f"Title: {job_data.title}")
             print(f"Company: {job_data.company}")
             print(f"Tags: {tag_str}")
