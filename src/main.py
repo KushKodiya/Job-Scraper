@@ -9,9 +9,7 @@ from .utils.date_utils import parse_job_date
 from .database import init_db, Job
 from .browser_manager import BrowserManager
 from .scrapers.boeing_scraper import BoeingScraper
-from .scrapers.indeed_scraper import IndeedScraper
 from .scrapers.simplyhired_scraper import SimplyHiredScraper
-from .scrapers.wellfound_scraper import WellfoundScraper
 
 
 from .slack_bot import SlackBot
@@ -43,11 +41,6 @@ async def run_scraper_cycle():
         # 3. Initialize Scrapers & Bot
         scrapers = [
             BoeingScraper(browser_manager),
-            # IndeedScraper(browser_manager, search_terms=[
-            #     "software engineer intern",
-            #     "aerospace engineering intern",
-            #     "finance intern"
-            # ]),
             SimplyHiredScraper(browser_manager, search_terms=[
                 "software engineer intern",
                 "aerospace engineering intern",
@@ -60,9 +53,6 @@ async def run_scraper_cycle():
                 "semiconductor intern", 
                 "VLSI intern"
             ]),
-            # WellfoundScraper(browser_manager, search_terms=[
-            #     "intern" # Broader term for startups
-            # ]),
 
             # Note: Greenhouse/Lever scrapers would be triggered 
             # if we had a list of board URLs to feed them.

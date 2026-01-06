@@ -62,7 +62,7 @@ class BoeingScraper(BaseScraper):
                 date_elem = li.select_one('.search-results__job-info.date')
                 date_posted = date_elem.get_text(strip=True) if date_elem else None
                 
-                # Filter for Intern/New Grad only
+                # Filter for Intern only
                 if not self.is_relevant_role(title):
                     continue
 

@@ -26,7 +26,7 @@ class GenericJobBoardScraper(JobBoardScraper):
                 print(f"[{self.company_name}] Searching for: {term}")
                 jobs = await self.scrape_search_term(page, term)
                 all_jobs.extend(jobs)
-                # Random sleep between terms
+
                 await asyncio.sleep(random.uniform(2, 5))
                 
         except Exception as e:
