@@ -141,13 +141,6 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == "--now":
             asyncio.run(run_scraper_cycle())
-        elif sys.argv[1] == "--seed":
-            # Seed test subscriptions
-            Session = init_db()
-            manager = SubscriptionManager(Session)
-            manager.add_subscription("U_TEST_USER", "software")
-            manager.add_subscription("U_TEST_USER", "aerospace")
-            print("Seeded test subscriptions for U_TEST_USER.")
     else:
         # Schedule it
         scheduler = AsyncIOScheduler()

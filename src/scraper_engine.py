@@ -42,18 +42,24 @@ class BaseScraper(ABC):
         title_lower = job.title.lower()
         
         keywords = {
-            'aerospace': ['aerospace', 'propulsion', 'flight', 'avionics', 'aircraft'],
-            'software': ['software', 'developer', 'software engineer', 'data scientist', 'computer', 'full stack', 'backend', 'frontend'],
-            'finance': ['finance', 'accounting', 'audit', 'tax', 'analyst'],
-            'consulting': ['consultant', 'strategy', 'advisory'],
-            'mechanical': ['mechanical', 'thermal', 'structural'],
-            'electrical': ['electrical', 'electronics', 'circuit'],
+            'aerospace': ['aerospace', 'propulsion', 'flight', 'avionics', 'aircraft', 'space', 'rocket', 'satellite', 'defen'], # 'defen' matches defense
+            'software': ['software', 'developer', 'engineer', 'data', 'full stack', 'backend', 'frontend', 'computer', 'machine learning', 'ai', 'cloud', 'cyber'],
+            'automotive': ['automotive', 'vehicle', 'autonomous', 'driver', 'adas', 'car', 'ev', 'mobility'],
+            'finance': ['finance', 'accounting', 'audit', 'tax', 'analyst', 'investment', 'trading', 'risk', 'capital'],
+            'manufacturing': ['manufacturing', 'production', 'industrial', 'process', 'supply chain', 'logistics', 'quality', 'operations'],
+            'ece hardware': ['hardware', 'electronics', 'circuit', 'fpga', 'asic', 'pcb', 'embedded', 'signal', 'rf', 'power'],
+            'semiconductors': ['semiconductor', 'lithography', 'wafer', 'device physics', 'vlsi', 'silicon', 'chip', 'fab'],
+            'general': ['business', 'marketing', 'hr', 'recruiter', 'project manager', 'program manager', 'sales', 'consultant', 'strategy', 'admin'],
         }
         
         for category, terms in keywords.items():
             if any(term in title_lower for term in terms):
                 tags.append(category)
-                
+        
+        # If no specific tag found, mark as 'other'
+        if not tags:
+            tags.append('other')
+            
         return tags
 
     def is_relevant_role(self, title: str) -> bool:
