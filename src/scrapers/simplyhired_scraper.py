@@ -78,8 +78,19 @@ class SimplyHiredScraper(GenericJobBoardScraper):
                     company=company,
                     url=url,
                     location=location,
+                    url=url,
+                    location=location,
                     date_posted=None
                 )
+                
+                # Date
+                date_elem = card.select_one('time')
+                if not date_elem:
+                     date_elem = card.select_one('[data-testid="searchSerpJobDate"]')
+                
+                if date_elem:
+                    job.date_posted = date_elem.get_text(strip=True)
+
                 jobs_list.append(job)
                 
             except Exception as e:

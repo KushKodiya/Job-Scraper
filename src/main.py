@@ -1,10 +1,11 @@
 import sys
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
+from .utils.date_utils import parse_job_date
 from .database import init_db, Job
 from .browser_manager import BrowserManager
 from .scrapers.boeing_scraper import BoeingScraper
@@ -96,6 +97,15 @@ async def run_scraper_cycle():
                 continue
             
             # New Job Found
+            
+            # Date Filtering
+            job_date = parse_job_date(job_data.date_posted)
+            if job_date:
+                days_old = (datetime.utcnow() - job_date).days
+                if days_old > 7:
+                    logger.info(f"Skipping old job: {job_data.title} (Posted {days_old} days ago)")
+                    continue
+            
             logger.info(f"New job detected: {job_data.title}")
             
             # Simple tag filtering

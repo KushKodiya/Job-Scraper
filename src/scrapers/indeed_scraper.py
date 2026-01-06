@@ -92,6 +92,18 @@ class IndeedScraper(GenericJobBoardScraper):
                     date_posted=None,
                     job_id=job_id
                 )
+                
+                # Try to extract date
+                date_elem = card.select_one('span.date')
+                if not date_elem:
+                    date_elem = card.select_one('[data-testid="myJobsStateDate"]')
+                
+                if date_elem:
+                     # e.g. "Posted 30+ days ago"
+                     text = date_elem.get_text(strip=True)
+                     # Clean up "Posted" prefix if separate in text but not element
+                     job.date_posted = text
+
                 jobs_list.append(job)
                 
             except Exception as e:
