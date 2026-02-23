@@ -1,7 +1,7 @@
 import sys
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
@@ -33,8 +33,7 @@ async def run_scraper_cycle():
     session = Session()
     
     # 2. Browser Manager
-    # Switch to headless=False to bypass basic Cloudflare/CAPTCHA detection for debugging
-    browser_manager = BrowserManager(headless=False)
+    browser_manager = BrowserManager(headless=True)
     await browser_manager.init()
     
     try:
@@ -72,35 +71,39 @@ async def run_scraper_cycle():
             else:
                 all_found_jobs.extend(res)
         
-        # 5. Process Results
-        new_jobs_count = 0
-        parent_thread_ts = None
+        # 5. Process Results — first pass: identify genuinely new, recent jobs
+        new_jobs = []  # list of (job_data, tags) tuples
+        seen_ids = set()  # deduplicate within this run (before DB commit)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for job_data in all_found_jobs:
-            # Check if exists
+            if job_data.id in seen_ids:
+                continue
             existing = session.query(Job).filter_by(id=job_data.id).first()
             if existing:
                 continue
-            
-            # New Job Found
-            
-            # Date Filtering
+
+            # Date filtering
             job_date = parse_job_date(job_data.date_posted)
             if job_date:
-                days_old = (datetime.utcnow() - job_date).days
+                days_old = (now - job_date).days
                 if days_old > 7:
                     logger.info(f"Skipping old job: {job_data.title} (Posted {days_old} days ago)")
                     continue
-            
-            logger.info(f"New job detected: {job_data.title}")
-            
-            # Simple tag filtering
-            # Note: We need to access the scraper that found it to use filter_interests? 
-            # Or just move filter_interests to a utility or static method.
-            # For now, just instantiating a helper or using one of the instances
-            # Hack: use first scraper instance for filtering logic as it is shared
+            elif job_data.date_posted is not None:
+                # date_posted text exists but couldn't be parsed — log a warning and include
+                logger.warning(f"Could not parse date '{job_data.date_posted}' for: {job_data.title} — including anyway")
+
+            seen_ids.add(job_data.id)
             tags = scrapers[0].filter_interests(job_data)
-            
-            # Save to DB
+            new_jobs.append((job_data, tags))
+
+        # Second pass: create Slack thread (only if there are new jobs), then save and post
+        parent_thread_ts = None
+        if new_jobs:
+            parent_thread_ts = await bot.post_message("🚀 *Scraper Cycle Started*: Finding new jobs...")
+
+        for job_data, tags in new_jobs:
+            logger.info(f"New job detected: {job_data.title}")
             new_job = Job(
                 id=job_data.id,
                 company=job_data.company,
@@ -110,32 +113,17 @@ async def run_scraper_cycle():
                 tags=tags
             )
             session.add(new_job)
-            new_jobs_count += 1
-            
-            # Post to Slack
-            # Create a thread for this batch if it's the first job of the batch, or reuse existing?
-            # Ideally we want ONE parent message for the whole cycle. 
-            # But the cycle logic is streaming jobs one by one.
-            # Let's start the thread BEFORE the loop if we found jobs? 
-            # Actually, we are iterating `all_found_jobs`. We can check if `new_jobs_count == 0` to start it.
-            
-            if new_jobs_count == 0 and not parent_thread_ts:
-                 # This is the first new job we are about to save. Start the thread.
-                 parent_thread_ts = await bot.post_message(f"🚀 *Scraper Cycle Started*: Finding new jobs...")
-            
             await bot.post_job(job_data, tags, thread_ts=parent_thread_ts)
-            
+
         session.commit()
-        session.commit()
-        logger.info(f"Cycle complete. Added {new_jobs_count} new jobs.")
+        logger.info(f"Cycle complete. Added {len(new_jobs)} new jobs.")
         
         if parent_thread_ts and bot.client:
-             # Update the parent message to show final count
-             await bot.client.chat_update(
-                 channel=bot.channel,
-                 ts=parent_thread_ts,
-                 text=f"✅ *Scraper Cycle Complete*: Found {new_jobs_count} new jobs today."
-             )
+            await bot.client.chat_update(
+                channel=bot.channel,
+                ts=parent_thread_ts,
+                text=f"✅ *Scraper Cycle Complete*: Found {len(new_jobs)} new jobs today."
+            )
         
     finally:
         session.close()

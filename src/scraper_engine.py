@@ -15,15 +15,13 @@ class JobData:
 
     @property
     def id(self) -> str:
-        """Generate a unique ID for the job based on company and ID/URL."""
-        if self.job_id:
-            # Use the explicit ID if provided (more stable)
-            unique_str = f"{self.company}:{self.job_id}"
-        else:
-            # Fallback to URL (strip common tracking params if possible or use raw)
-            # Simple strip of query params might be too aggressive if ID is in query
-            unique_str = f"{self.company}:{self.url}"
-            
+        """Generate a unique ID for the job based on company and title.
+        Using title (not URL) so the same job posted on multiple boards is
+        treated as one listing and not re-posted to Slack.
+        """
+        company_key = self.company.lower().strip()
+        title_key = self.title.lower().strip()
+        unique_str = f"{company_key}:{title_key}"
         return hashlib.md5(unique_str.encode()).hexdigest()
 
 class BaseScraper(ABC):

@@ -1,43 +1,55 @@
 from typing import List
 from bs4 import BeautifulSoup
-import asyncio
+import logging
 from ..scraper_engine import BaseScraper, JobData
+
+logger = logging.getLogger("BoeingScraper")
+
+MAX_PAGES = 3
 
 class BoeingScraper(BaseScraper):
     def __init__(self, browser_manager):
         super().__init__("Boeing", browser_manager)
-        self.start_urls = [
-            "https://jobs.boeing.com/search-jobs",
-            "https://jobs.boeing.com/search-jobs/intern/185/1"
-        ]
 
     async def scrape(self) -> List[JobData]:
-        print(f"[{self.company_name}] Starting scrape...")
+        logger.info(f"[{self.company_name}] Starting scrape...")
         jobs = []
-        
+
         context = await self.browser_manager.get_new_context()
         page = await context.new_page()
-        
+
         try:
-            for url in self.start_urls:
-                print(f"[{self.company_name}] Scraping URL: {url}")
+            # General search (page 1 only — no paginated URL pattern for this endpoint)
+            try:
+                logger.info(f"[{self.company_name}] Scraping general search page")
+                await page.goto("https://jobs.boeing.com/search-jobs", timeout=60000)
+                await page.wait_for_selector('#search-results-list', timeout=30000)
+                content = await page.content()
+                self._extract_jobs_from_page(content, jobs)
+            except Exception as e:
+                logger.warning(f"[{self.company_name}] Error on general search: {e}")
+
+            # Intern search — paginate using the /intern/185/N URL pattern
+            for page_num in range(1, MAX_PAGES + 1):
+                url = f"https://jobs.boeing.com/search-jobs/intern/185/{page_num}"
                 try:
+                    logger.info(f"[{self.company_name}] Scraping intern page {page_num}")
                     await page.goto(url, timeout=60000)
-                    # Wait for the list to load
                     await page.wait_for_selector('#search-results-list', timeout=30000)
-                    
-                    # Scrape the jobs from the current page
                     content = await page.content()
+                    jobs_before = len(jobs)
                     self._extract_jobs_from_page(content, jobs)
+                    if len(jobs) == jobs_before:
+                        logger.info(f"[{self.company_name}] No new jobs on page {page_num} — stopping")
+                        break
                 except Exception as e:
-                        print(f"[{self.company_name}] Error scraping URL {url}: {e}")
-            
-        except Exception as e:
-            print(f"[{self.company_name}] Error during scraping: {e}")
+                    logger.warning(f"[{self.company_name}] Error on intern page {page_num}: {e}")
+                    break
+
         finally:
             await context.close()
-                
-        print(f"[{self.company_name}] Found {len(jobs)} jobs.")
+
+        logger.info(f"[{self.company_name}] Found {len(jobs)} jobs.")
         return jobs
 
     def _extract_jobs_from_page(self, html: str, jobs_list: List[JobData]):

@@ -13,11 +13,9 @@ class SlackBot:
         self.channel = channel or os.getenv("SLACK_CHANNEL")
         # If no token, we are in dry run mode
         if self.token:
-            # Fix for SSL Cert Error on some Macs/Environments
             import ssl
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            import certifi
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
             self.client = AsyncWebClient(token=self.token, ssl=ssl_context)
         else:
             self.client = None
