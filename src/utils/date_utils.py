@@ -18,10 +18,18 @@ def parse_job_date(date_str: str) -> Optional[datetime]:
     """
     if not date_str:
         return None
-        
+
+    # Handle ISO 8601: "2026-02-20T10:30:00.000Z" or "2026-02-20T10:30:00Z"
+    iso_match = re.match(r'(\d{4}-\d{2}-\d{2})T', date_str.strip())
+    if iso_match:
+        try:
+            return datetime.strptime(iso_match.group(1), '%Y-%m-%d')
+        except ValueError:
+            pass
+
     term = date_str.lower().strip()
     now = datetime.utcnow()
-    
+
     # 1. Handle "Just posted", "Today", "Active x days ago"
     if any(x in term for x in ['just posted', 'today', 'hours ago', 'minutes ago']):
         return now

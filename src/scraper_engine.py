@@ -24,6 +24,32 @@ class JobData:
         unique_str = f"{company_key}:{title_key}"
         return hashlib.md5(unique_str.encode()).hexdigest()
 
+def filter_interests(job: JobData) -> List[str]:
+    """Return a list of interests (tags) based on the job title/description."""
+    tags = []
+    title_lower = job.title.lower()
+
+    keywords = {
+        'aerospace': ['aerospace', 'propulsion', 'flight', 'avionics', 'aircraft', 'space', 'rocket', 'satellite', 'defen'],
+        'software': ['software', 'developer', 'full stack', 'backend', 'frontend', 'computer science', 'machine learning', 'ai', 'cloud', 'cyber', 'data science', 'data engineer', 'firmware', 'sre', 'devops'],
+        'automotive': ['automotive', 'vehicle', 'autonomous', 'driver', 'adas', 'car', 'ev', 'mobility'],
+        'finance': ['finance', 'accounting', 'audit', 'tax', 'analyst', 'investment', 'trading', 'risk', 'capital'],
+        'manufacturing': ['manufacturing', 'production', 'industrial', 'process', 'supply chain', 'logistics', 'quality', 'operations'],
+        'ece hardware': ['hardware', 'electronics', 'circuit', 'fpga', 'asic', 'pcb', 'embedded', 'signal', 'rf', 'power'],
+        'semiconductors': ['semiconductor', 'lithography', 'wafer', 'device physics', 'vlsi', 'silicon', 'chip', 'fab'],
+        'general': ['business', 'marketing', 'hr', 'recruiter', 'project manager', 'program manager', 'sales', 'consultant', 'strategy', 'admin'],
+    }
+
+    for category, terms in keywords.items():
+        if any(term in title_lower for term in terms):
+            tags.append(category)
+
+    if not tags:
+        tags.append('other')
+
+    return tags
+
+
 class BaseScraper(ABC):
     def __init__(self, company_name: str, browser_manager: BrowserManager):
         self.company_name = company_name
@@ -33,32 +59,9 @@ class BaseScraper(ABC):
     async def scrape(self) -> List[JobData]:
         """Scrape the carrier page/job board and return a list of JobData objects."""
         pass
-        
+
     def filter_interests(self, job: JobData) -> List[str]:
-        """Return a list of interests (tags) based on the job title/description."""
-        tags = []
-        title_lower = job.title.lower()
-        
-        keywords = {
-            'aerospace': ['aerospace', 'propulsion', 'flight', 'avionics', 'aircraft', 'space', 'rocket', 'satellite', 'defen'], # 'defen' matches defense
-            'software': ['software', 'developer', 'full stack', 'backend', 'frontend', 'computer science', 'machine learning', 'ai', 'cloud', 'cyber', 'data science', 'data engineer', 'firmware', 'sre', 'devops'],
-            'automotive': ['automotive', 'vehicle', 'autonomous', 'driver', 'adas', 'car', 'ev', 'mobility'],
-            'finance': ['finance', 'accounting', 'audit', 'tax', 'analyst', 'investment', 'trading', 'risk', 'capital'],
-            'manufacturing': ['manufacturing', 'production', 'industrial', 'process', 'supply chain', 'logistics', 'quality', 'operations'],
-            'ece hardware': ['hardware', 'electronics', 'circuit', 'fpga', 'asic', 'pcb', 'embedded', 'signal', 'rf', 'power'],
-            'semiconductors': ['semiconductor', 'lithography', 'wafer', 'device physics', 'vlsi', 'silicon', 'chip', 'fab'],
-            'general': ['business', 'marketing', 'hr', 'recruiter', 'project manager', 'program manager', 'sales', 'consultant', 'strategy', 'admin'],
-        }
-        
-        for category, terms in keywords.items():
-            if any(term in title_lower for term in terms):
-                tags.append(category)
-        
-        # If no specific tag found, mark as 'other'
-        if not tags:
-            tags.append('other')
-            
-        return tags
+        return filter_interests(job)
 
     def is_relevant_role(self, title: str) -> bool:
         """Check if the job title matches Internship or New Grad keywords."""

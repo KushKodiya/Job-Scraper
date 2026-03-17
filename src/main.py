@@ -3,13 +3,20 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
 
 from .utils.date_utils import parse_job_date
 from .database import init_db, Job
 from .browser_manager import BrowserManager
+from .scraper_engine import filter_interests
 from .scrapers.boeing_scraper import BoeingScraper
 from .scrapers.simplyhired_scraper import SimplyHiredScraper
+from .scrapers.workday_scraper import NissanScraper
+from .scrapers.phenom_scraper import PhenomScraper
+from .scrapers.automotive_scrapers import (
+    TeslaScraper, StellantisScraper, VWGroupScraper,
+    BMWScraper, MercedesScraper, VolvoScraper,
+    HyundaiScraper, SubaruScraper,
+)
 
 
 from .slack_bot import SlackBot
@@ -45,16 +52,30 @@ async def run_scraper_cycle():
                 "aerospace engineering intern",
                 "automotive engineering intern",
                 "finance intern",
-                "manufacturing intern", 
+                "manufacturing intern",
                 "supply chain intern",
                 "hardware engineering intern",
                 "embedded systems intern",
-                "semiconductor intern", 
+                "semiconductor intern",
                 "VLSI intern"
             ]),
-
-            # Note: Greenhouse/Lever scrapers would be triggered 
-            # if we had a list of board URLs to feed them.
+            # Workday API scraper
+            NissanScraper(browser_manager),
+            # Phenom People platform
+            PhenomScraper("Toyota", browser_manager, "https://careers.toyota.com/us/en/search-results?keywords=intern", "https://careers.toyota.com"),
+            PhenomScraper("Honda", browser_manager, "https://careers.honda.com/us/en/search-results?keywords=intern", "https://careers.honda.com"),
+            PhenomScraper("GM", browser_manager, "https://search-careers.gm.com/en/?q=intern&location=United+States", "https://search-careers.gm.com"),
+            PhenomScraper("Ford", browser_manager, "https://www.careers.ford.com/en/home.html?SearchKeyword=intern", "https://www.careers.ford.com"),
+            # Tesla REST API
+            TeslaScraper(browser_manager),
+            # Playwright-based automotive scrapers
+            StellantisScraper(browser_manager),
+            VWGroupScraper(browser_manager),
+            BMWScraper(browser_manager),
+            MercedesScraper(browser_manager),
+            VolvoScraper(browser_manager),
+            HyundaiScraper(browser_manager),
+            SubaruScraper(browser_manager),
         ]
         
         sub_manager = SubscriptionManager(Session)
@@ -94,7 +115,7 @@ async def run_scraper_cycle():
                 logger.warning(f"Could not parse date '{job_data.date_posted}' for: {job_data.title} — including anyway")
 
             seen_ids.add(job_data.id)
-            tags = scrapers[0].filter_interests(job_data)
+            tags = filter_interests(job_data)
             new_jobs.append((job_data, tags))
 
         # Second pass: create Slack thread (only if there are new jobs), then save and post
@@ -113,9 +134,8 @@ async def run_scraper_cycle():
                 tags=tags
             )
             session.add(new_job)
+            session.commit()
             await bot.post_job(job_data, tags, thread_ts=parent_thread_ts)
-
-        session.commit()
         logger.info(f"Cycle complete. Added {len(new_jobs)} new jobs.")
         
         if parent_thread_ts and bot.client:
