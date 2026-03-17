@@ -1,6 +1,7 @@
 import sys
 import asyncio
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -118,11 +119,8 @@ async def run_scraper_cycle():
             tags = filter_interests(job_data)
             new_jobs.append((job_data, tags))
 
-        # Second pass: create Slack thread (only if there are new jobs), then save and post
-        parent_thread_ts = None
-        if new_jobs:
-            parent_thread_ts = await bot.post_message("🚀 *Scraper Cycle Started*: Finding new jobs...")
-
+        # Second pass: commit new jobs to DB, then group by category and post
+        committed_jobs = []  # track jobs that were saved to DB
         for job_data, tags in new_jobs:
             logger.info(f"New job detected: {job_data.title}")
             new_job = Job(
@@ -135,15 +133,22 @@ async def run_scraper_cycle():
             )
             session.add(new_job)
             session.commit()
-            await bot.post_job(job_data, tags, thread_ts=parent_thread_ts)
-        logger.info(f"Cycle complete. Added {len(new_jobs)} new jobs.")
-        
-        if parent_thread_ts and bot.client:
-            await bot.client.chat_update(
-                channel=bot.channel,
-                ts=parent_thread_ts,
-                text=f"✅ *Scraper Cycle Complete*: Found {len(new_jobs)} new jobs today."
-            )
+            committed_jobs.append((job_data, tags))
+
+        # Group jobs by category (a job appears under every matching category)
+        category_jobs = defaultdict(list)
+        for job_data, tags in committed_jobs:
+            for tag in tags:
+                category_jobs[tag].append((job_data, tags))
+
+        # Post each category as its own thread
+        for category, jobs in category_jobs.items():
+            subscribers = sub_manager.get_subscribers_for_tags([category])
+            thread_ts = await bot.post_category_header(category, subscribers, len(jobs))
+            for job_data, tags in jobs:
+                await bot.post_job(job_data, tags, thread_ts=thread_ts)
+
+        logger.info(f"Cycle complete. Added {len(committed_jobs)} new jobs across {len(category_jobs)} categories.")
         
     finally:
         session.close()
