@@ -1,30 +1,59 @@
 import os
-from datetime import datetime
-from sqlalchemy import create_engine, Column, String, DateTime, PickleType
-from sqlalchemy.orm import declarative_base, sessionmaker
+import logging
+from supabase import create_client
+from dotenv import load_dotenv
+import pathlib
 
-Base = declarative_base()
+env_path = pathlib.Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
-class Job(Base):
-    __tablename__ = 'jobs'
-    
-    id = Column(String, primary_key=True)  # Hash of company + url
-    company = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    location = Column(String)
-    url = Column(String, unique=True, nullable=False)
-    posted_at = Column(DateTime, default=datetime.utcnow)
-    found_at = Column(DateTime, default=datetime.utcnow)
-    tags = Column(PickleType, default=[]) # Serialized list of strings
+logger = logging.getLogger("Database")
 
-class Subscription(Base):
-    __tablename__ = 'subscriptions'
-    
-    id = Column(String, primary_key=True) # user_id + interest
-    user_id = Column(String, nullable=False)
-    interest = Column(String, nullable=False)
 
-def init_db(db_path='jobs.db'):
-    engine = create_engine(f'sqlite:///{db_path}')
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
+def init_db():
+    """Initialize and return a Supabase client."""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        logger.warning("SUPABASE_URL or SUPABASE_KEY not set — database operations will fail")
+    return create_client(url, key)
+
+
+def job_exists(client, job_id: str) -> bool:
+    """Check if a job with the given ID already exists."""
+    result = client.table("jobs").select("id").eq("id", job_id).execute()
+    return len(result.data) > 0
+
+
+def insert_job(client, job_dict: dict):
+    """Insert a new job into the database."""
+    client.table("jobs").insert(job_dict).execute()
+
+
+def add_subscription(client, sub_id: str, user_id: str, interest: str):
+    """Add a subscription (idempotent via upsert)."""
+    client.table("subscriptions").upsert({
+        "id": sub_id,
+        "user_id": user_id,
+        "interest": interest
+    }).execute()
+
+
+def remove_subscription(client, sub_id: str):
+    """Remove a subscription."""
+    client.table("subscriptions").delete().eq("id", sub_id).execute()
+
+
+def get_subscribers_for_interests(client, interests: list) -> list:
+    """Return unique user IDs subscribed to any of the given interests."""
+    if not interests:
+        return []
+    interests_lower = [i.lower() for i in interests]
+    result = client.table("subscriptions").select("user_id").in_("interest", interests_lower).execute()
+    return list({row["user_id"] for row in result.data})
+
+
+def get_user_subscriptions(client, user_id: str) -> list:
+    """Return all subscriptions for a user."""
+    result = client.table("subscriptions").select("interest").eq("user_id", user_id).execute()
+    return [row["interest"] for row in result.data]

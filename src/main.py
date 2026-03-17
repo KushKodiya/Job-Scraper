@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .utils.date_utils import parse_job_date
-from .database import init_db, Job
+from .database import init_db, job_exists, insert_job, get_subscribers_for_interests
 from .browser_manager import BrowserManager
 from .scraper_engine import filter_interests
 from .scrapers.boeing_scraper import BoeingScraper
@@ -35,15 +35,14 @@ logger = logging.getLogger("Main")
 
 async def run_scraper_cycle():
     logger.info("Running scraper cycle...")
-    
-    # 1. Initialize DB (Sync for now, safe enough for low volume)
-    Session = init_db()
-    session = Session()
-    
+
+    # 1. Initialize DB
+    db = init_db()
+
     # 2. Browser Manager
     browser_manager = BrowserManager(headless=True)
     await browser_manager.init()
-    
+
     try:
         # 3. Initialize Scrapers & Bot
         scrapers = [
@@ -78,21 +77,21 @@ async def run_scraper_cycle():
             HyundaiScraper(browser_manager),
             SubaruScraper(browser_manager),
         ]
-        
-        sub_manager = SubscriptionManager(Session)
+
+        sub_manager = SubscriptionManager(db)
         bot = SlackBot(subscription_manager=sub_manager) # Will use env vars or dry mode
-        
+
         # 4. Run Scrapers concurrently
         tasks = [scraper.scrape() for scraper in scrapers]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         all_found_jobs = []
         for res in results:
             if isinstance(res, Exception):
                 logger.error(f"Scraper failed: {res}")
             else:
                 all_found_jobs.extend(res)
-        
+
         # 5. Process Results — first pass: identify genuinely new, recent jobs
         new_jobs = []  # list of (job_data, tags) tuples
         seen_ids = set()  # deduplicate within this run (before DB commit)
@@ -100,8 +99,7 @@ async def run_scraper_cycle():
         for job_data in all_found_jobs:
             if job_data.id in seen_ids:
                 continue
-            existing = session.query(Job).filter_by(id=job_data.id).first()
-            if existing:
+            if job_exists(db, job_data.id):
                 continue
 
             # Date filtering
@@ -123,16 +121,14 @@ async def run_scraper_cycle():
         committed_jobs = []  # track jobs that were saved to DB
         for job_data, tags in new_jobs:
             logger.info(f"New job detected: {job_data.title}")
-            new_job = Job(
-                id=job_data.id,
-                company=job_data.company,
-                title=job_data.title,
-                location=job_data.location,
-                url=job_data.url,
-                tags=tags
-            )
-            session.add(new_job)
-            session.commit()
+            insert_job(db, {
+                "id": job_data.id,
+                "company": job_data.company,
+                "title": job_data.title,
+                "location": job_data.location,
+                "url": job_data.url,
+                "tags": tags
+            })
             committed_jobs.append((job_data, tags))
 
         # Group jobs by category (a job appears under every matching category)
@@ -143,15 +139,15 @@ async def run_scraper_cycle():
 
         # Post each category as its own thread
         for category, jobs in category_jobs.items():
-            subscribers = sub_manager.get_subscribers_for_tags([category])
+            subscribers = get_subscribers_for_interests(db, [category])
+            logger.info(f"Category '{category}': {len(jobs)} jobs, subscribers={subscribers}")
             thread_ts = await bot.post_category_header(category, subscribers, len(jobs))
             for job_data, tags in jobs:
                 await bot.post_job(job_data, tags, thread_ts=thread_ts)
 
         logger.info(f"Cycle complete. Added {len(committed_jobs)} new jobs across {len(category_jobs)} categories.")
-        
+
     finally:
-        session.close()
         await browser_manager.close()
 
 async def run_scheduler():
@@ -159,7 +155,7 @@ async def run_scheduler():
     scheduler.add_job(run_scraper_cycle, 'interval', hours=24)
     logger.info("Scheduler started. Running every 24 hours.")
     scheduler.start()
-    
+
     # Log next run time
     jobs = scheduler.get_jobs()
     if jobs:

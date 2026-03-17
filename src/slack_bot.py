@@ -42,7 +42,7 @@ class SlackBot:
         if subscribers:
             mentions_str = "\n" + " ".join([f"<@{uid}>" for uid in subscribers])
 
-        text = f":mega: *{category.title()}* — {job_count} new job{'s' if job_count != 1 else ''}{mentions_str}"
+        text = f"*{category.title()}* — {job_count} new job{'s' if job_count != 1 else ''}{mentions_str}"
 
         if self.client:
             try:

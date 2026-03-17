@@ -1,5 +1,5 @@
 playwright
-sqlalchemy
+supabase
 apscheduler
 slack_sdk
 beautifulsoup4
