@@ -22,10 +22,11 @@ class SimplyHiredScraper(GenericJobBoardScraper):
             try:
                 logger.info(f"[{self.company_name}] Fetching page {page_num} for '{search_term}'")
                 await page.goto(url, timeout=60000)
-                await asyncio.sleep(random.uniform(1, 3))
+                # Wait longer for Cloudflare challenge to resolve
+                await asyncio.sleep(random.uniform(3, 6))
 
                 try:
-                    await page.wait_for_selector('#job-list', timeout=15000)
+                    await page.wait_for_selector('#job-list', timeout=30000)
                 except Exception:
                     logger.info(f"[{self.company_name}] No results on page {page_num} for '{search_term}' — stopping")
                     break
@@ -46,38 +47,27 @@ class SimplyHiredScraper(GenericJobBoardScraper):
 
     def _extract_jobs(self, html: str, jobs_list: List[JobData]):
         soup = BeautifulSoup(html, 'html.parser')
-        
-        # SimplyHired classes (often obfuscated but structured)
-        # Look for the list items
-        cards = soup.select('ul#job-list li article')
-        if not cards:
-             cards = soup.select('ul#job-list li') # Fallback
+
+        cards = soup.select('ul#job-list li')
 
         for card in cards:
             try:
-                title_elem = card.select_one('a.chakra-button') # Often the title is a link with chakra class
+                # Title & URL
+                title_elem = card.select_one('[data-testid="searchSerpJobTitle"] a')
                 if not title_elem:
-                     title_elem = card.select_one('h3')
+                    continue
 
-                title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
-                
+                title = title_elem.get_text(strip=True)
+                href = title_elem.get('href', '')
+                url = "https://www.simplyhired.com" + href if href.startswith('/') else href
+
                 # Company
                 company_elem = card.select_one('[data-testid="companyName"]')
                 company = company_elem.get_text(strip=True) if company_elem else "SimplyHired Job"
-                
+
                 # Location
                 loc_elem = card.select_one('[data-testid="searchSerpJobLocation"]')
                 location = loc_elem.get_text(strip=True) if loc_elem else "Unknown Location"
-                
-                # URL
-                if title_elem and title_elem.name == 'a':
-                     href = title_elem.get('href')
-                     url = "https://www.simplyhired.com" + href if href.startswith('/') else href
-                else:
-                    # Look for any link
-                    link_elem = card.select_one('a')
-                    href = link_elem.get('href') if link_elem else ""
-                    url = "https://www.simplyhired.com" + href if href.startswith('/') else href
 
                 if not self.is_relevant_role(title):
                     continue
@@ -89,16 +79,13 @@ class SimplyHiredScraper(GenericJobBoardScraper):
                     location=location,
                     date_posted=None
                 )
-                
+
                 # Date
-                date_elem = card.select_one('time')
-                if not date_elem:
-                     date_elem = card.select_one('[data-testid="searchSerpJobDate"]')
-                
+                date_elem = card.select_one('[data-testid="searchSerpJobDateStamp"]')
                 if date_elem:
                     job.date_posted = date_elem.get_text(strip=True)
 
                 jobs_list.append(job)
-                
+
             except Exception as e:
                 continue
