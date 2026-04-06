@@ -27,7 +27,13 @@ def job_exists(client, job_id: str) -> bool:
 
 def insert_job(client, job_dict: dict):
     """Insert a new job into the database."""
-    client.table("jobs").insert(job_dict).execute()
+    try:
+        client.table("jobs").insert(job_dict).execute()
+    except Exception as e:
+        if "23505" in str(e):
+            logger.info(f"Job already exists in database: {job_dict.get('url')}")
+        else:
+            raise
 
 
 def add_subscription(client, sub_id: str, user_id: str, interest: str):
