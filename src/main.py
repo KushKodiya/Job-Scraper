@@ -252,8 +252,29 @@ async def run_scraper_cycle(scraper_names=None):
         sub_manager = SubscriptionManager(db)
         bot = SlackBot(subscription_manager=sub_manager) # Will use env vars or dry mode
 
-        # 4. Run Scrapers concurrently
-        tasks = [scraper.scrape() for scraper in scrapers]
+        # 4. Run Scrapers concurrently with bounded concurrency + per-scraper timeout
+        # - Limits parallel browser contexts to prevent severe contention
+        # - Enforces a hard timeout per scraper so one hung site can't block the whole run
+        MAX_CONCURRENT_SCRAPERS = 8
+        PER_SCRAPER_TIMEOUT = 300  # 5 minutes
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCRAPERS)
+
+        async def run_one(scraper):
+            async with semaphore:
+                try:
+                    return await asyncio.wait_for(
+                        scraper.scrape(), timeout=PER_SCRAPER_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(
+                        f"[{scraper.company_name}] Timed out after {PER_SCRAPER_TIMEOUT}s — skipping"
+                    )
+                    return []
+                except Exception as e:
+                    logger.error(f"[{scraper.company_name}] Scraper failed: {e}")
+                    return []
+
+        tasks = [run_one(scraper) for scraper in scrapers]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_found_jobs = []
