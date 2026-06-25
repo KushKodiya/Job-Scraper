@@ -1,9 +1,30 @@
 """One-time migration script: SQLite jobs.db -> Supabase"""
 import sqlite3
 import pickle
+import io
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+
+
+class _SafeUnpickler(pickle.Unpickler):
+    """Unpickler that refuses to resolve any global/class. The legacy `tags`
+    column only ever stored plain lists of strings, which unpickle from native
+    opcodes without any GLOBAL reference — so blocking find_class entirely keeps
+    valid data loadable while neutralizing the arbitrary-code-execution risk of
+    pickle.loads on a swapped/tampered jobs.db file.
+    """
+
+    def find_class(self, module, name):
+        raise pickle.UnpicklingError(
+            f"Refusing to unpickle disallowed global {module}.{name}"
+        )
+
+
+def safe_pickle_loads(blob):
+    """Deserialize a legacy tags blob, returning [] if it isn't a plain list."""
+    result = _SafeUnpickler(io.BytesIO(blob)).load()
+    return result if isinstance(result, list) else []
 
 # Load env from src/.env
 load_dotenv(dotenv_path="src/.env")
@@ -27,9 +48,9 @@ print(f"Found {len(rows)} jobs to migrate...")
 batch = []
 for row in rows:
     job_id, company, title, location, url, posted_at, found_at, tags_blob = row
-    # Deserialize PickleType tags
+    # Deserialize PickleType tags (restricted unpickler — see _SafeUnpickler)
     try:
-        tags = pickle.loads(tags_blob) if tags_blob else []
+        tags = safe_pickle_loads(tags_blob) if tags_blob else []
     except Exception:
         tags = []
 

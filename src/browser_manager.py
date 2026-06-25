@@ -29,8 +29,7 @@ class BrowserManager:
         user_agent = self.ua.random
         context = await self.browser.new_context(
             user_agent=user_agent,
-            viewport={'width': 1920, 'height': 1080},
-            ignore_https_errors=True
+            viewport={'width': 1920, 'height': 1080}
         )
         
         # Add init scripts to evade detection
